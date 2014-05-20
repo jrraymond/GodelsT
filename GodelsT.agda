@@ -44,17 +44,13 @@ module GodelsT where
     s-value : ∀{e} → Value (s e)
     lam-value : ∀{ρ τ} (e : (ρ :: []) ⊢ τ)  → Value (lam e)
 
-  {- we can rename contexts. if for all τ, τ is in Γ₁, then τ is in Γ₂-}
+  {- Proof of renaming and required lemmas. -}
   rename-ctx : Ctx → Ctx → Set
   rename-ctx Γ₁ Γ₂ = ∀ {τ} → τ ∈ Γ₁ → τ ∈ Γ₂
-
-  {- renaming be induction
-    for any Γ₁ Γ₂ τ, and a proof that rename-ctx Γ₁ Γ₂, then rename-ctx (τ :: Γ₁) (τ :: Γ₂) -}
   rctx-cons : ∀{Γ₁ Γ₂ τ} → rename-ctx Γ₁ Γ₂ → rename-ctx (τ :: Γ₁) (τ :: Γ₂)
   rctx-cons x i0 = i0
   rctx-cons x (iS y) = iS (x y) 
-    
-  {- Proof of renaming. if Γ₁ proves τ and for all τ in Γ₁ τ is in Γ₂, then Γ₂ proves τ -}
+
   rename : ∀ {Γ₁ Γ₂ τ} → Γ₁ ⊢ τ → rename-ctx Γ₁ Γ₂ → Γ₂ ⊢ τ
   rename z r = z
   rename (var x) r = var (r x)
@@ -63,28 +59,22 @@ module GodelsT where
   rename (lam e) r = lam (rename e (rctx-cons r))
   rename (ap e₁ e₂) r = ap (rename e₁ r) (rename e₂ r) 
 
-  {- Substitution context -}
+  {- Lemma 4.4 substitution: If Γ, x : τ ⊢ e' : τ' and Γ ⊢ e : τ, then Γ ⊢ [e/x]e' : τ' -}
+  {- Some lemmas we need to prove 4.4: -}
   swap-ctx : Ctx → Ctx → Set
   swap-ctx Γ₁ Γ₂ = ∀{τ} → τ ∈ Γ₂ → Γ₁ ⊢ τ
-
-  {-  To show if a τ is in a context then the context proves τ -}
   lemma : ∀{Γ₁ Γ₂ τ} → swap-ctx Γ₁ Γ₂ → swap-ctx (τ :: Γ₁) (τ :: Γ₂)                                              
   lemma c₁ i0 =  (var i0) 
   lemma c₁ (iS i0) = rename (c₁ i0) iS
   lemma c₁ (iS (iS c₂)) = rename (c₁ (iS c₂)) iS
-    
-  {- needed for third application case if τ₁ is in (nat :: τ :: []) then [] ⊢ τ-}
   lemma1 : ∀ {Γ τ} → Γ ⊢ τ → swap-ctx Γ (τ :: Γ)
   lemma1 x i0 = x
   lemma1 x (iS v) = var v
-
-  {- needed for rec case -}
   lemma2 : ∀ {Γ τ τ'} → Γ ⊢ τ → Γ ⊢ τ' → swap-ctx Γ (τ :: (τ' :: Γ))
   lemma2 x y i0 = x
   lemma2 x y (iS i0) = y
   lemma2 x y (iS (iS v)) = var v
 
-  {- Lemma 4.4 substitution: If Γ, x : τ ⊢ e' : τ' and Γ ⊢ e : τ, then Γ ⊢ [e/x]e' : τ' -}
   substitute : ∀{Γ₁ Γ₂ τ} → swap-ctx Γ₁ Γ₂ → Γ₂ ⊢ τ → Γ₁ ⊢ τ
   substitute c z = z
   substitute c (var x) = c x
@@ -105,12 +95,6 @@ module GodelsT where
                   → (rec e₀ e₁ z) ↦ e₀
     rec-s-step : ∀{τ} (e : [] ⊢ nat) → (e₀ : [] ⊢ τ) → (e₁ : (nat :: (τ :: [])) ⊢ τ)
                   → rec e₀ e₁ (s e) ↦ substitute (lemma2 e (rec e₀ e₁ e)) e₁
-    {- for rec 3 we need to show {τ₁ : Typ} → τ₁ ∈ (nat :: (τ :: [])) → [] ⊢ τ₁
-      we use the lemma:
-            lemma2 : ∀ {Γ τ τ'} → Γ ⊢ τ → Γ ⊢ τ' → sctx Γ (τ :: (τ' :: Γ))
-      we need have e : [] ⊢ nat, rec e₀ e₁ e : ⊢ τ, using sctx Γ (τ :: τ' :: Γ) 
-      we get Γ ⊢ τ
-     -}
 
   {- Proof of progress -}
   progress : ∀{τ} (e : [] ⊢ τ) → Either (Value e) (Σ ([] ⊢ τ) (λ e' → e ↦ e'))
@@ -125,4 +109,3 @@ module GodelsT where
   progress (ap e₁ e₂) with progress e₁
   progress (ap .(lam e₁') e₂) | Inl (lam-value e₁') = Inr (substitute (lemma1 e₂) e₁' , ap-lam-step e₁' e₂ )
   progress (ap e₁ e₂) | Inr (e₁' , e₁↦e₁') = Inr (ap e₁' e₂ , ap-e₁-step e₁ e₁' e₂ e₁↦e₁')
-  {-in ap progress case lemma1 needed for {τ : Typ} → τ ∈ (τ₂ :: []) → [] ⊢ τ -}
